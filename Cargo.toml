@@ -1,0 +1,28 @@
+[package]
+name = "example-plugin"
+version = "1.0.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "An example plugin template for TimeTracker"
+license = "MIT"
+repository = "https://github.com/your-username/your-plugin-name"
+
+[lib]
+name = "example_plugin_backend"
+crate-type = ["cdylib"]  # Dynamic library for plugin loading
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+
+# Plugin API dependencies (adjust versions based on TimeTracker core)
+# These will be provided by the TimeTracker app at runtime
+# Include them here for compilation, but they should match the core app versions
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

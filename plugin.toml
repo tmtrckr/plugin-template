@@ -1,0 +1,27 @@
+[plugin]
+name = "example-plugin"                    # Unique plugin ID
+display_name = "Example Plugin"            # Display name shown in UI
+version = "1.0.0"                          # Plugin version
+author = "Your Name"                       # Plugin author
+description = "An example plugin template for TimeTracker"
+repository = "https://github.com/your-username/your-plugin-name"
+license = "MIT"
+api_version = "1.0"                        # Plugin API version
+min_core_version = "0.3.0"                # Minimum required TimeTracker version
+max_core_version = "1.0.0"                # Maximum supported TimeTracker version
+
+[backend]
+crate_name = "example_plugin"              # Rust crate name
+library_name = "example_plugin_backend"    # Library name (without lib prefix)
+entry_point = "plugin_init"                # Entry point function name
+
+[frontend]
+entry = "frontend/dist/index.js"          # Path to compiled JavaScript bundle
+components = ["ExampleSettings"]           # Exported React component names
+
+[build]
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-apple-darwin", 
+    "x86_64-unknown-linux-gnu"
+]
