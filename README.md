@@ -58,7 +58,7 @@ description = "Description of your plugin"
 
 1. Use the SDK from the main repository pinned to a specific version (recommended for production plugins):
 ```toml
-time-tracker-plugin-sdk = { git = "https://github.com/bthos/time-tracker-app", package = "time-tracker-plugin-sdk", rev = "003d4143" }
+time-tracker-plugin-sdk = { git = "https://github.com/bthos/time-tracker-app", package = "time-tracker-plugin-sdk", rev = "003d4143c50283016206b893ce57e2cf547355d0" }
 ```
 
 2. Or use a local path if developing alongside the main app:
