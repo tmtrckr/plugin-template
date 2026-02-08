@@ -7,7 +7,7 @@ description = "An example plugin template for TimeTracker"
 repository = "https://github.com/your-username/your-plugin-name"
 license = "MIT"
 api_version = "1.0"                        # Plugin API version
-min_core_version = "0.3.0"                # Minimum required TimeTracker version
+min_core_version = "0.2.8"                # Minimum required TimeTracker version
 max_core_version = "1.0.0"                # Maximum supported TimeTracker version
 
 [backend]

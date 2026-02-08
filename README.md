@@ -39,7 +39,7 @@ description = "Description of your plugin"
 repository = "https://github.com/your-username/my-plugin"
 license = "MIT"
 api_version = "1.0"
-min_core_version = "0.2.7"           # Minimum required TimeTracker version
+min_core_version = "0.2.8"           # Minimum required TimeTracker version
 ```
 
 ### 3. Update Cargo.toml
@@ -56,15 +56,17 @@ description = "Description of your plugin"
 
 **Important**: Add the plugin SDK dependency. You can either:
 
-1. Use the SDK from the main repository (recommended for templates):
+1. Use the SDK from the main repository pinned to a specific version (recommended for production plugins):
 ```toml
-time-tracker-plugin-sdk = { git = "https://github.com/bthos/time-tracker-app", package = "time-tracker-plugin-sdk" }
+time-tracker-plugin-sdk = { git = "https://github.com/bthos/time-tracker-app", package = "time-tracker-plugin-sdk", rev = "003d4143" }
 ```
 
 2. Or use a local path if developing alongside the main app:
 ```toml
 time-tracker-plugin-sdk = { path = "../time-tracker-app/plugin-sdk" }
 ```
+
+**Note**: Always pin the SDK to a specific `rev` (commit hash) in production to ensure reproducible builds and avoid breaking changes from upstream updates.
 
 ### 4. Update plugin.toml Backend Section
 

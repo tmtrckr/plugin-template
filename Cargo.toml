@@ -16,7 +16,7 @@ crate-type = ["cdylib"]  # Dynamic library for plugin loading
 # Note: In a real plugin, you would add this as a dependency pointing to the SDK
 # For the template, we'll use a placeholder that matches the actual SDK structure
 # time-tracker-plugin-sdk = { path = "../plugin-sdk" }  # Uncomment and adjust path when using
-time-tracker-plugin-sdk = { git = "https://github.com/bthos/time-tracker-app", package = "time-tracker-plugin-sdk" }
+time-tracker-plugin-sdk = { git = "https://github.com/bthos/time-tracker-app", package = "time-tracker-plugin-sdk", rev = "003d4143c50283016206b893ce57e2cf547355d0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
