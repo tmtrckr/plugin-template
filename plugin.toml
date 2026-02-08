@@ -11,9 +11,9 @@ min_core_version = "0.3.0"                # Minimum required TimeTracker version
 max_core_version = "1.0.0"                # Maximum supported TimeTracker version
 
 [backend]
-crate_name = "example_plugin"              # Rust crate name
-library_name = "example_plugin_backend"    # Library name (without lib prefix)
-entry_point = "plugin_init"                # Entry point function name
+crate_name = "example-plugin"             # Rust crate name (must match Cargo.toml package.name)
+library_name = "example_plugin_backend"    # Library name (without lib prefix, must match Cargo.toml [lib].name)
+entry_point = "_plugin_create"            # Entry point function name (must match exported function in lib.rs)
 
 [frontend]
 entry = "frontend/dist/index.js"          # Path to compiled JavaScript bundle
