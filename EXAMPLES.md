@@ -1,80 +1,67 @@
 # Plugin Examples
 
-This document provides practical examples for common plugin use cases.
+This document provides practical examples for common plugin use cases using the `time-tracker-plugin-sdk` from crates.io.
 
-## Example 1: Activity Counter Plugin
+## Example 1: Basic Plugin with Commands
 
-Count activities and display statistics.
+A simple plugin that responds to commands.
 
 ### Backend (`src/plugin.rs`)
 
 ```rust
-use super::*;
-use std::sync::{Arc, Mutex};
+use time_tracker_plugin_sdk::{Plugin, PluginInfo, PluginAPIInterface};
+use serde_json;
 
-pub struct ActivityCounter {
-    name: String,
-    version: String,
-    count: Arc<Mutex<u64>>,
+pub struct BasicPlugin {
+    info: PluginInfo,
 }
 
-impl ActivityCounter {
+impl BasicPlugin {
     pub fn new() -> Self {
         Self {
-            name: "activity-counter".to_string(),
-            version: "1.0.0".to_string(),
-            count: Arc::new(Mutex::new(0)),
+            info: PluginInfo {
+                id: "basic-plugin".to_string(),
+                name: "Basic Plugin".to_string(),
+                version: "1.0.0".to_string(),
+                description: Some("A basic example plugin".to_string()),
+            },
+        }
+    }
+}
+
+impl Plugin for BasicPlugin {
+    fn info(&self) -> &PluginInfo {
+        &self.info
+    }
+    
+    fn initialize(&mut self, _api: &dyn PluginAPIInterface) -> Result<(), String> {
+        println!("BasicPlugin: Initialized");
+        Ok(())
+    }
+    
+    fn invoke_command(&self, command: &str, params: serde_json::Value, _api: &dyn PluginAPIInterface) -> Result<serde_json::Value, String> {
+        match command {
+            "hello" => {
+                Ok(serde_json::json!({
+                    "message": "Hello from BasicPlugin!",
+                    "params": params
+                }))
+            }
+            _ => Err(format!("Unknown command: {}", command))
         }
     }
     
-    pub fn get_count(&self) -> u64 {
-        *self.count.lock().unwrap()
-    }
-}
-
-impl Plugin for ActivityCounter {
-    fn name(&self) -> &str {
-        &self.name
-    }
-    
-    fn version(&self) -> &str {
-        &self.version
-    }
-    
-    fn on_init(&mut self, _api: &PluginAPI) -> Result<()> {
-        println!("ActivityCounter: Initialized");
+    fn shutdown(&self) -> Result<(), String> {
+        println!("BasicPlugin: Shutdown");
         Ok(())
     }
     
-    fn on_start(&mut self) -> Result<()> {
-        *self.count.lock().unwrap() = 0;
-        println!("ActivityCounter: Started, counter reset");
-        Ok(())
-    }
-    
-    fn on_stop(&mut self) -> Result<()> {
-        let count = *self.count.lock().unwrap();
-        println!("ActivityCounter: Stopped, total activities: {}", count);
-        Ok(())
-    }
-    
-    fn on_activity_recorded(&mut self, _activity: &Activity) -> Result<()> {
-        let mut count = self.count.lock().unwrap();
-        *count += 1;
-        println!("ActivityCounter: Activity count: {}", *count);
-        Ok(())
-    }
-    
-    fn on_category_created(&mut self, _category: &Category) -> Result<()> {
-        Ok(())
-    }
-    
-    fn migrations(&self) -> Vec<Migration> {
+    fn get_schema_extensions(&self) -> Vec<time_tracker_plugin_sdk::SchemaExtension> {
         vec![]
     }
     
-    fn commands(&self) -> Vec<String> {
-        vec!["get_activity_count".to_string()]
+    fn get_frontend_bundle(&self) -> Option<Vec<u8>> {
+        None
     }
 }
 ```
@@ -82,191 +69,243 @@ impl Plugin for ActivityCounter {
 ### Frontend (`frontend/src/index.tsx`)
 
 ```tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
-export const ActivityCounterWidget: React.FC = () => {
-  const [count, setCount] = useState<number>(0);
+export const BasicPluginWidget: React.FC = () => {
+  const [message, setMessage] = useState<string>('');
   
-  useEffect(() => {
-    // This would call a Tauri command exposed by the plugin
-    // const fetchCount = async () => {
-    //   const result = await invoke('get_activity_count');
-    //   setCount(result);
-    // };
-    // fetchCount();
-    // const interval = setInterval(fetchCount, 5000);
-    // return () => clearInterval(interval);
-  }, []);
+  const handleCommand = async () => {
+    // Call plugin command via Tauri
+    // const result = await invoke('invoke_plugin_command', {
+    //   pluginId: 'basic-plugin',
+    //   command: 'hello',
+    //   params: {}
+    // });
+    // setMessage(result.message);
+  };
   
   return (
     <div className="p-4 bg-blue-50 rounded-lg">
-      <h3 className="text-lg font-semibold mb-2">Activity Counter</h3>
-      <p className="text-3xl font-bold">{count}</p>
-      <p className="text-sm text-gray-600 mt-1">activities tracked</p>
+      <h3 className="text-lg font-semibold mb-2">Basic Plugin</h3>
+      <button onClick={handleCommand} className="px-4 py-2 bg-blue-500 text-white rounded">
+        Call Command
+      </button>
+      {message && <p className="mt-2">{message}</p>}
     </div>
   );
 };
 
 export default {
-  ActivityCounterWidget,
+  BasicPluginWidget,
 };
 ```
 
-## Example 2: Category Statistics Plugin
+## Example 2: Plugin with Schema Extensions
 
-Track time spent in each category.
+Extend activities with custom fields.
 
 ### Backend (`src/plugin.rs`)
 
 ```rust
-use super::*;
-use std::collections::HashMap;
+use time_tracker_plugin_sdk::{Plugin, PluginInfo, PluginAPIInterface, EntityType, SchemaChange, ModelField, TableColumn};
 
-pub struct CategoryStats {
-    name: String,
-    version: String,
-    stats: Arc<Mutex<HashMap<i64, u64>>>, // category_id -> seconds
+pub struct ActivityExtensionPlugin {
+    info: PluginInfo,
 }
 
-impl CategoryStats {
+impl ActivityExtensionPlugin {
     pub fn new() -> Self {
         Self {
-            name: "category-stats".to_string(),
-            version: "1.0.0".to_string(),
-            stats: Arc::new(Mutex::new(HashMap::new())),
+            info: PluginInfo {
+                id: "activity-extension".to_string(),
+                name: "Activity Extension".to_string(),
+                version: "1.0.0".to_string(),
+                description: Some("Adds priority field to activities".to_string()),
+            },
         }
     }
 }
 
-impl Plugin for CategoryStats {
-    fn name(&self) -> &str {
-        &self.name
+impl Plugin for ActivityExtensionPlugin {
+    fn info(&self) -> &PluginInfo {
+        &self.info
     }
     
-    fn version(&self) -> &str {
-        &self.version
-    }
-    
-    fn on_init(&mut self, _api: &PluginAPI) -> Result<()> {
+    fn initialize(&mut self, api: &dyn PluginAPIInterface) -> Result<(), String> {
+        // Add a priority column to activities table
+        api.register_schema_extension(
+            EntityType::Activity,
+            vec![
+                SchemaChange::AddColumn {
+                    table: "activities".to_string(),
+                    column: "priority".to_string(),
+                    column_type: "INTEGER".to_string(),
+                    default: Some("0".to_string()),
+                    foreign_key: None,
+                },
+            ],
+        )?;
+        
+        // Register model extension so the field is available in Rust types
+        api.register_model_extension(
+            EntityType::Activity,
+            vec![
+                ModelField {
+                    name: "priority".to_string(),
+                    type_: "Option<i32>".to_string(),
+                    optional: true,
+                },
+            ],
+        )?;
+        
         Ok(())
     }
     
-    fn on_start(&mut self) -> Result<()> {
-        self.stats.lock().unwrap().clear();
-        Ok(())
-    }
-    
-    fn on_stop(&mut self) -> Result<()> {
-        Ok(())
-    }
-    
-    fn on_activity_recorded(&mut self, activity: &Activity) -> Result<()> {
-        if let Some(category_id) = activity.category_id {
-            if let Some(ended_at) = activity.ended_at {
-                let duration = (ended_at - activity.started_at) as u64;
-                let mut stats = self.stats.lock().unwrap();
-                *stats.entry(category_id).or_insert(0) += duration;
+    fn invoke_command(&self, command: &str, params: serde_json::Value, api: &dyn PluginAPIInterface) -> Result<serde_json::Value, String> {
+        match command {
+            "set_priority" => {
+                // Use call_db_method to interact with database
+                api.call_db_method("update_activity", serde_json::json!({
+                    "id": params["id"],
+                    "priority": params["priority"]
+                }))
             }
+            _ => Err(format!("Unknown command: {}", command))
         }
+    }
+    
+    fn shutdown(&self) -> Result<(), String> {
         Ok(())
     }
     
-    fn on_category_created(&mut self, _category: &Category) -> Result<()> {
-        Ok(())
-    }
-    
-    fn migrations(&self) -> Vec<Migration> {
+    fn get_schema_extensions(&self) -> Vec<time_tracker_plugin_sdk::SchemaExtension> {
         vec![]
     }
     
-    fn commands(&self) -> Vec<String> {
-        vec!["get_category_stats".to_string()]
+    fn get_frontend_bundle(&self) -> Option<Vec<u8>> {
+        None
     }
 }
 ```
 
-## Example 3: Plugin with Database Storage
+## Example 3: Plugin with Custom Table
 
-Store plugin data in the database.
-
-### Migration (`migrations/001_initial.sql`)
-
-```sql
-CREATE TABLE IF NOT EXISTS my_plugin_storage (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    key TEXT NOT NULL UNIQUE,
-    value TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_my_plugin_storage_key ON my_plugin_storage(key);
-```
+Create a custom table for plugin data.
 
 ### Backend (`src/plugin.rs`)
 
 ```rust
-impl Plugin for MyPlugin {
-    fn migrations(&self) -> Vec<Migration> {
-        vec![
-            Migration {
-                version: 1,
-                sql: include_str!("../migrations/001_initial.sql").to_string(),
+use time_tracker_plugin_sdk::{Plugin, PluginInfo, PluginAPIInterface, EntityType, SchemaChange, TableColumn, ForeignKey};
+
+pub struct NotesPlugin {
+    info: PluginInfo,
+}
+
+impl NotesPlugin {
+    pub fn new() -> Self {
+        Self {
+            info: PluginInfo {
+                id: "notes-plugin".to_string(),
+                name: "Notes Plugin".to_string(),
+                version: "1.0.0".to_string(),
+                description: Some("Add notes to activities".to_string()),
             },
-        ]
+        }
+    }
+}
+
+impl Plugin for NotesPlugin {
+    fn info(&self) -> &PluginInfo {
+        &self.info
     }
     
-    // Use PluginAPI to interact with database
-    fn on_init(&mut self, api: &PluginAPI) -> Result<()> {
-        // Example: Store plugin configuration
-        // api.db.execute(
-        //     "INSERT OR REPLACE INTO my_plugin_storage (key, value) VALUES (?1, ?2)",
-        //     &["config", "{\"enabled\": true}"]
-        // )?;
+    fn initialize(&mut self, api: &dyn PluginAPIInterface) -> Result<(), String> {
+        // Create a custom table for notes
+        api.register_schema_extension(
+            EntityType::Activity,
+            vec![
+                SchemaChange::CreateTable {
+                    table: "activity_notes".to_string(),
+                    columns: vec![
+                        TableColumn {
+                            name: "id".to_string(),
+                            column_type: "INTEGER".to_string(),
+                            primary_key: true,
+                            nullable: false,
+                            default: None,
+                            foreign_key: None,
+                        },
+                        TableColumn {
+                            name: "activity_id".to_string(),
+                            column_type: "INTEGER".to_string(),
+                            primary_key: false,
+                            nullable: false,
+                            default: None,
+                            foreign_key: Some(ForeignKey {
+                                table: "activities".to_string(),
+                                column: "id".to_string(),
+                            }),
+                        },
+                        TableColumn {
+                            name: "note".to_string(),
+                            column_type: "TEXT".to_string(),
+                            primary_key: false,
+                            nullable: false,
+                            default: None,
+                            foreign_key: None,
+                        },
+                        TableColumn {
+                            name: "created_at".to_string(),
+                            column_type: "INTEGER".to_string(),
+                            primary_key: false,
+                            nullable: false,
+                            default: Some("(strftime('%s', 'now'))".to_string()),
+                            foreign_key: None,
+                        },
+                    ],
+                },
+                SchemaChange::AddIndex {
+                    table: "activity_notes".to_string(),
+                    index: "idx_activity_notes_activity_id".to_string(),
+                    columns: vec!["activity_id".to_string()],
+                },
+            ],
+        )?;
+        
         Ok(())
+    }
+    
+    fn invoke_command(&self, command: &str, params: serde_json::Value, api: &dyn PluginAPIInterface) -> Result<serde_json::Value, String> {
+        match command {
+            "add_note" => {
+                // Note: You'll need to implement the database method in the core app
+                // or use raw SQL through call_db_method
+                api.call_db_method("add_activity_note", params)
+            }
+            "get_notes" => {
+                api.call_db_method("get_activity_notes", params)
+            }
+            _ => Err(format!("Unknown command: {}", command))
+        }
+    }
+    
+    fn shutdown(&self) -> Result<(), String> {
+        Ok(())
+    }
+    
+    fn get_schema_extensions(&self) -> Vec<time_tracker_plugin_sdk::SchemaExtension> {
+        vec![]
+    }
+    
+    fn get_frontend_bundle(&self) -> Option<Vec<u8>> {
+        None
     }
 }
 ```
 
-## Example 4: Event Subscription Plugin
+## Example 4: Settings Component
 
-Subscribe to TimeTracker events.
-
-### Backend (`src/plugin.rs`)
-
-```rust
-pub struct EventSubscriber {
-    name: String,
-    version: String,
-    subscription_id: Option<SubscriptionId>,
-}
-
-impl Plugin for EventSubscriber {
-    fn on_init(&mut self, api: &PluginAPI) -> Result<()> {
-        // Subscribe to activity recorded events
-        let callback = Box::new(|event: Event| {
-            println!("Event received: {:?}", event);
-        });
-        
-        self.subscription_id = Some(
-            api.subscribe(EventType::ActivityRecorded, callback)
-        );
-        
-        Ok(())
-    }
-    
-    fn on_stop(&mut self) -> Result<()> {
-        // Unsubscribe from events
-        // api.unsubscribe(self.subscription_id)?;
-        self.subscription_id = None;
-        Ok(())
-    }
-}
-```
-
-## Example 5: Settings Component with State
-
-React component that manages plugin settings.
+React component for plugin settings.
 
 ### Frontend (`frontend/src/index.tsx`)
 
@@ -289,9 +328,13 @@ export const MyPluginSettings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    // Load settings from plugin storage
+    // Load settings via plugin command
     // const loadSettings = async () => {
-    //   const saved = await invoke('get_plugin_settings');
+    //   const saved = await invoke('invoke_plugin_command', {
+    //     pluginId: 'my-plugin',
+    //     command: 'get_settings',
+    //     params: {}
+    //   });
     //   if (saved) setSettings(saved);
     //   setLoading(false);
     // };
@@ -300,8 +343,12 @@ export const MyPluginSettings: React.FC = () => {
   }, []);
   
   const saveSettings = async () => {
-    // Save settings via Tauri command
-    // await invoke('save_plugin_settings', { settings });
+    // Save settings via plugin command
+    // await invoke('invoke_plugin_command', {
+    //   pluginId: 'my-plugin',
+    //   command: 'save_settings',
+    //   params: { settings }
+    // });
     alert('Settings saved!');
   };
   
@@ -358,9 +405,21 @@ export default {
 
 ## Tips
 
-1. **State Management**: Use `Arc<Mutex<T>>` for shared state in Rust plugins
-2. **Error Handling**: Always return proper `Result` types from trait methods
-3. **Resource Cleanup**: Clean up subscriptions and resources in `on_stop`
-4. **Frontend Communication**: Use Tauri commands to communicate between frontend and backend
-5. **Database**: Use migrations for schema changes, never modify tables directly
-6. **Testing**: Test your plugin on all target platforms before releasing
+1. **SDK Version**: Always use the same SDK version that matches your target TimeTracker version
+2. **Schema Extensions**: Register schema extensions in `initialize()` before using them
+3. **Error Handling**: Always return proper `Result` types from trait methods
+4. **Resource Cleanup**: Clean up resources in `shutdown()`
+5. **Database Access**: Use `call_db_method()` to interact with the database through the core app
+6. **Frontend Communication**: Use Tauri commands to communicate between frontend and backend
+7. **Testing**: Test your plugin on all target platforms before releasing
+
+## Using the SDK
+
+Add the SDK to your `Cargo.toml`:
+
+```toml
+[dependencies]
+time-tracker-plugin-sdk = "0.2.10"  # Use the published version from crates.io
+```
+
+The SDK is published on [crates.io](https://crates.io/crates/time-tracker-plugin-sdk) and should be used by all plugins instead of local path or git dependencies.

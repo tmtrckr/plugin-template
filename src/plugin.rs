@@ -3,70 +3,83 @@
 //! This is a simple example plugin that demonstrates the Plugin trait.
 //! Replace this with your own plugin logic.
 
-use super::*;
+use time_tracker_plugin_sdk::{Plugin, PluginInfo, PluginAPIInterface};
+use serde_json;
 
 /// Example plugin implementation
 pub struct ExamplePlugin {
-    name: String,
-    version: String,
-    initialized: bool,
+    info: PluginInfo,
 }
 
 impl ExamplePlugin {
     /// Create a new instance of the example plugin
     pub fn new() -> Self {
         Self {
-            name: "example-plugin".to_string(),
-            version: "1.0.0".to_string(),
-            initialized: false,
+            info: PluginInfo {
+                id: "example-plugin".to_string(),
+                name: "Example Plugin".to_string(),
+                version: "1.0.0".to_string(),
+                description: Some("An example plugin template for TimeTracker".to_string()),
+            },
         }
     }
 }
 
 impl Plugin for ExamplePlugin {
-    fn name(&self) -> &str {
-        &self.name
+    fn info(&self) -> &PluginInfo {
+        &self.info
     }
     
-    fn version(&self) -> &str {
-        &self.version
-    }
-    
-    fn on_init(&mut self, _api: &PluginAPI) -> Result<()> {
-        self.initialized = true;
+    fn initialize(&mut self, api: &dyn PluginAPIInterface) -> Result<(), String> {
+        // Register schema extensions, model extensions, etc. here
+        // Example: Add a custom field to activities
+        // api.register_schema_extension(
+        //     EntityType::Activity,
+        //     vec![
+        //         SchemaChange::AddColumn {
+        //             table: "activities".to_string(),
+        //             column: "custom_field".to_string(),
+        //             column_type: "TEXT".to_string(),
+        //             default: None,
+        //             foreign_key: None,
+        //         },
+        //     ],
+        // )?;
+        
         println!("ExamplePlugin: Initialized");
         Ok(())
     }
     
-    fn on_start(&mut self) -> Result<()> {
-        println!("ExamplePlugin: Started");
+    fn invoke_command(&self, command: &str, params: serde_json::Value, api: &dyn PluginAPIInterface) -> Result<serde_json::Value, String> {
+        match command {
+            "example_command" => {
+                // Handle your plugin commands here
+                // You can use api.call_db_method() to interact with the database
+                Ok(serde_json::json!({
+                    "status": "success",
+                    "message": "Example command executed",
+                    "params": params
+                }))
+            }
+            _ => Err(format!("Unknown command: {}", command))
+        }
+    }
+    
+    fn shutdown(&self) -> Result<(), String> {
+        // Clean up resources here
+        println!("ExamplePlugin: Shutdown");
         Ok(())
     }
     
-    fn on_stop(&mut self) -> Result<()> {
-        println!("ExamplePlugin: Stopped");
-        Ok(())
-    }
-    
-    fn on_activity_recorded(&mut self, activity: &Activity) -> Result<()> {
-        println!("ExamplePlugin: Activity recorded - {} - {}", activity.app_name, activity.window_title);
-        Ok(())
-    }
-    
-    fn on_category_created(&mut self, category: &Category) -> Result<()> {
-        println!("ExamplePlugin: Category created - {}", category.name);
-        Ok(())
-    }
-    
-    fn migrations(&self) -> Vec<Migration> {
-        // Return any database migrations your plugin needs
-        // See migrations/001_initial.sql for an example
+    fn get_schema_extensions(&self) -> Vec<time_tracker_plugin_sdk::SchemaExtension> {
+        // Return schema extensions if your plugin needs to create tables or add columns
+        // See EXAMPLES.md for examples
         vec![]
     }
     
-    fn commands(&self) -> Vec<String> {
-        // Return list of Tauri command names exposed by this plugin
-        // These commands will be registered with Tauri
-        vec![]
+    fn get_frontend_bundle(&self) -> Option<Vec<u8>> {
+        // Return frontend bundle bytes if your plugin provides UI
+        // The frontend should be built and included here
+        None
     }
 }

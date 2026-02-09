@@ -52,29 +52,92 @@ name = "my-plugin"
 version = "1.0.0"
 authors = ["Your Name <your.email@example.com>"]
 description = "Description of your plugin"
+
+[lib]
+name = "my_plugin_backend"
+crate-type = ["cdylib"]  # Dynamic library for plugin loading
+
+[dependencies]
+time-tracker-plugin-sdk = "0.2.10"  # Use the published SDK from crates.io
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 ```
 
-### 4. Implement Your Plugin
+**Important**: The SDK dependency is already included in the template. Make sure to use the same version that matches your target TimeTracker version.
 
-Edit `src/plugin.rs` to implement your plugin logic:
+### 4. Update plugin.toml Backend Section
+
+Make sure the backend section matches your Cargo.toml:
+
+```toml
+[backend]
+crate_name = "my-plugin"              # Must match Cargo.toml [package].name
+library_name = "my_plugin_backend"    # Must match Cargo.toml [lib].name
+entry_point = "_plugin_create"        # Must match exported function in lib.rs
+```
+
+### 5. Implement Your Plugin
+
+Edit `src/plugin.rs` to implement your plugin logic. The plugin must implement the `Plugin` trait from `time-tracker-plugin-sdk`:
 
 ```rust
+use time_tracker_plugin_sdk::{Plugin, PluginInfo, PluginAPIInterface};
+
+pub struct MyPlugin {
+    info: PluginInfo,
+}
+
 impl Plugin for MyPlugin {
-    fn on_init(&mut self, api: &PluginAPI) -> Result<()> {
-        // Initialize your plugin
+    fn info(&self) -> &PluginInfo {
+        &self.info
+    }
+    
+    fn initialize(&mut self, api: &dyn PluginAPIInterface) -> Result<(), String> {
+        // Register schema extensions, model extensions, etc.
         Ok(())
     }
     
-    fn on_activity_recorded(&mut self, activity: &Activity) -> Result<()> {
-        // React to new activities
+    fn invoke_command(&self, command: &str, params: serde_json::Value, api: &dyn PluginAPIInterface) -> Result<serde_json::Value, String> {
+        // Handle plugin commands
+        Ok(serde_json::json!({}))
+    }
+    
+    fn shutdown(&self) -> Result<(), String> {
+        // Clean up resources
         Ok(())
     }
     
-    // ... implement other trait methods
+    fn get_schema_extensions(&self) -> Vec<SchemaExtension> {
+        vec![]
+    }
+    
+    fn get_frontend_bundle(&self) -> Option<Vec<u8>> {
+        None
+    }
 }
 ```
 
-### 5. Build Your Plugin
+### 6. Export FFI Functions
+
+In `src/lib.rs`, export the required FFI functions:
+
+```rust
+use time_tracker_plugin_sdk::Plugin;
+
+#[no_mangle]
+pub extern "C" fn _plugin_create() -> *mut dyn Plugin {
+    Box::into_raw(Box::new(plugin::MyPlugin::new()))
+}
+
+#[no_mangle]
+pub extern "C" fn _plugin_destroy(plugin: *mut dyn Plugin) {
+    unsafe {
+        let _ = Box::from_raw(plugin);
+    }
+}
+```
+
+### 7. Build Your Plugin
 
 #### Local Development
 
@@ -139,9 +202,9 @@ The `plugin.toml` file defines your plugin's metadata and configuration:
 
 ### [backend] Section
 
-- `crate_name`: Rust crate name (must match Cargo.toml)
-- `library_name`: Name of the compiled library (without lib prefix)
-- `entry_point`: Function name exported from lib.rs (usually `plugin_init`)
+- `crate_name`: Rust crate name (must match `Cargo.toml` `[package].name`)
+- `library_name`: Name of the compiled library (must match `Cargo.toml` `[lib].name`)
+- `entry_point`: Function name exported from lib.rs (must be `_plugin_create`)
 
 ### [frontend] Section
 
@@ -156,41 +219,67 @@ The `plugin.toml` file defines your plugin's metadata and configuration:
 
 ### Plugin Trait
 
-All plugins must implement the `Plugin` trait:
+All plugins must implement the `Plugin` trait from `time-tracker-plugin-sdk`:
 
 ```rust
 pub trait Plugin: Send + Sync {
-    fn name(&self) -> &str;
-    fn version(&self) -> &str;
-    fn on_init(&mut self, api: &PluginAPI) -> Result<()>;
-    fn on_start(&mut self) -> Result<()>;
-    fn on_stop(&mut self) -> Result<()>;
-    fn on_activity_recorded(&mut self, activity: &Activity) -> Result<()>;
-    fn on_category_created(&mut self, category: &Category) -> Result<()>;
-    fn migrations(&self) -> Vec<Migration>;
-    fn commands(&self) -> Vec<String>;
+    /// Get plugin metadata
+    fn info(&self) -> &PluginInfo;
+    
+    /// Initialize the plugin
+    fn initialize(&mut self, api: &dyn PluginAPIInterface) -> Result<(), String>;
+    
+    /// Invoke a command on the plugin
+    fn invoke_command(&self, command: &str, params: serde_json::Value, api: &dyn PluginAPIInterface) -> Result<serde_json::Value, String>;
+    
+    /// Shutdown the plugin
+    fn shutdown(&self) -> Result<(), String>;
+    
+    /// Get schema extensions that this plugin requires
+    fn get_schema_extensions(&self) -> Vec<SchemaExtension>;
+    
+    /// Get frontend bundle bytes (if plugin provides UI)
+    fn get_frontend_bundle(&self) -> Option<Vec<u8>>;
 }
 ```
 
-### Plugin API
+### Plugin API Interface
 
-The `PluginAPI` provides access to TimeTracker functionality:
+The `PluginAPIInterface` provides access to TimeTracker functionality:
 
 ```rust
-impl PluginAPI {
-    pub fn get_activities(&self, start: i64, end: i64) -> Result<Vec<Activity>>;
-    pub fn create_activity(&self, activity: Activity) -> Result<i64>;
-    pub fn subscribe(&self, event: EventType, callback: Box<dyn Fn(Event)>) -> SubscriptionId;
+pub trait PluginAPIInterface: Send + Sync {
+    /// Register a database schema extension
+    fn register_schema_extension(
+        &self,
+        entity_type: EntityType,
+        schema_changes: Vec<SchemaChange>,
+    ) -> Result<(), String>;
+    
+    /// Register a model extension
+    fn register_model_extension(
+        &self,
+        entity_type: EntityType,
+        model_fields: Vec<ModelField>,
+    ) -> Result<(), String>;
+    
+    /// Register query filters
+    fn register_query_filters(
+        &self,
+        entity_type: EntityType,
+        query_filters: Vec<QueryFilter>,
+    ) -> Result<(), String>;
+    
+    /// Call a database method by name with JSON parameters
+    fn call_db_method(&self, method: &str, params: serde_json::Value) -> Result<serde_json::Value, String>;
 }
 ```
 
-### Lifecycle Hooks
+### Lifecycle
 
-- **`on_init`**: Called when the plugin is first loaded. Use this to set up your plugin.
-- **`on_start`**: Called when the plugin is enabled/started.
-- **`on_stop`**: Called when the plugin is disabled/stopped.
-- **`on_activity_recorded`**: Called whenever a new activity is recorded.
-- **`on_category_created`**: Called when a new category is created.
+- **`initialize`**: Called when the plugin is first loaded. Use this to register extensions and set up your plugin.
+- **`invoke_command`**: Called when a command is invoked on your plugin. Handle your plugin's commands here.
+- **`shutdown`**: Called when the plugin is unloaded. Clean up any resources here.
 
 ## Frontend Components
 
@@ -213,42 +302,82 @@ List exported components in `plugin.toml`:
 components = ["MySettings"]
 ```
 
-## Database Migrations
+## Extension API
 
-Create SQL migration files in the `migrations/` directory:
+Plugins can extend Core entities (activities, manual_entries, categories) using the Extension API:
 
-```
-migrations/
-├── 001_initial.sql
-├── 002_add_user_preferences.sql
-└── 003_add_analytics_table.sql
-```
+### 1. Database Schema Extensions
 
-Migrations are executed automatically when the plugin is installed or updated.
-
-Example migration:
-
-```sql
-CREATE TABLE IF NOT EXISTS my_plugin_data (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    key TEXT NOT NULL UNIQUE,
-    value TEXT,
-    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
-);
-```
-
-Return migrations from your plugin:
+Add columns to Core tables or create new tables:
 
 ```rust
-fn migrations(&self) -> Vec<Migration> {
+api.register_schema_extension(
+    EntityType::Activity,
     vec![
-        Migration {
-            version: 1,
-            sql: include_str!("../migrations/001_initial.sql").to_string(),
+        // Create a new table
+        SchemaChange::CreateTable {
+            table: "my_plugin_data".to_string(),
+            columns: vec![
+                TableColumn {
+                    name: "id".to_string(),
+                    column_type: "INTEGER".to_string(),
+                    primary_key: true,
+                    nullable: false,
+                    default: None,
+                    foreign_key: None,
+                },
+                // ... more columns
+            ],
         },
-    ]
+        // Add a column to activities table
+        SchemaChange::AddColumn {
+            table: "activities".to_string(),
+            column: "custom_field".to_string(),
+            column_type: "TEXT".to_string(),
+            default: None,
+            foreign_key: None,
+        },
+    ],
+)?;
+```
+
+### 2. Model Extensions
+
+Add fields to Core data structures:
+
+```rust
+api.register_model_extension(
+    EntityType::Activity,
+    vec![
+        ModelField {
+            name: "custom_field".to_string(),
+            type_: "Option<String>".to_string(),
+            optional: true,
+        },
+    ],
+)?;
+```
+
+### 3. Database Operations
+
+Plugins can interact with the database through the `call_db_method` API:
+
+```rust
+fn invoke_command(&self, command: &str, params: serde_json::Value, api: &dyn PluginAPIInterface) -> Result<serde_json::Value, String> {
+    match command {
+        "get_my_data" => {
+            // Call a database method
+            api.call_db_method("get_my_data", params)
+        }
+        "create_my_data" => {
+            api.call_db_method("create_my_data", params)
+        }
+        _ => Err(format!("Unknown command: {}", command)),
+    }
 }
 ```
+
+**Note**: Database methods must be implemented in the core app's `database.rs`. For custom tables created by your plugin, you'll need to add corresponding methods to the core app or use raw SQL through the API.
 
 ## Building and Distribution
 
@@ -326,49 +455,110 @@ RUST_LOG=debug ./time-tracker-app
 Always return proper errors from trait methods:
 
 ```rust
-fn on_init(&mut self, api: &PluginAPI) -> Result<()> {
-    // Handle errors gracefully
-    api.get_activities(0, 0)?;
+fn initialize(&mut self, api: &dyn PluginAPIInterface) -> Result<(), String> {
+    api.register_schema_extension(...)
+        .map_err(|e| format!("Failed to register schema: {}", e))?;
     Ok(())
 }
 ```
 
 ### Resource Management
 
-- Clean up resources in `on_stop`
-- Unsubscribe from events when stopping
-- Close database connections if opened
+- Clean up resources in `shutdown`
+- Don't hold references to API after shutdown
+- Use proper error handling for all operations
 
 ### Security
 
 - Validate all user input
 - Don't expose sensitive data in frontend components
-- Use parameterized queries for database operations
+- Use parameterized queries for database operations (handled by core app)
+
+### Extension API Best Practices
+
+- Always register schema extensions before model extensions
+- Use foreign keys for referential integrity
+- Add indexes for frequently queried columns
+- Keep extension fields optional when possible for compatibility
 
 ## Examples
 
-### Example: Activity Logger Plugin
+### Example: Extending Activities with Custom Fields
 
 ```rust
-pub struct ActivityLogger {
-    log_file: PathBuf,
+fn initialize(&mut self, api: &dyn PluginAPIInterface) -> Result<(), String> {
+    // Add a custom field to activities
+    api.register_schema_extension(
+        EntityType::Activity,
+        vec![
+            SchemaChange::AddColumn {
+                table: "activities".to_string(),
+                column: "priority".to_string(),
+                column_type: "INTEGER".to_string(),
+                default: Some("0".to_string()),
+                foreign_key: None,
+            },
+        ],
+    )?;
+    
+    api.register_model_extension(
+        EntityType::Activity,
+        vec![
+            ModelField {
+                name: "priority".to_string(),
+                type_: "Option<i32>".to_string(),
+                optional: true,
+            },
+        ],
+    )?;
+    
+    Ok(())
 }
+```
 
-impl Plugin for ActivityLogger {
-    fn on_activity_recorded(&mut self, activity: &Activity) -> Result<()> {
-        let log_entry = format!(
-            "{}: {} - {}\n",
-            activity.started_at,
-            activity.app_name,
-            activity.window_title
-        );
-        std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.log_file)?
-            .write_all(log_entry.as_bytes())?;
-        Ok(())
-    }
+### Example: Creating a Custom Table
+
+```rust
+fn initialize(&mut self, api: &dyn PluginAPIInterface) -> Result<(), String> {
+    api.register_schema_extension(
+        EntityType::Activity,
+        vec![
+            SchemaChange::CreateTable {
+                table: "notes".to_string(),
+                columns: vec![
+                    TableColumn {
+                        name: "id".to_string(),
+                        column_type: "INTEGER".to_string(),
+                        primary_key: true,
+                        nullable: false,
+                        default: None,
+                        foreign_key: None,
+                    },
+                    TableColumn {
+                        name: "activity_id".to_string(),
+                        column_type: "INTEGER".to_string(),
+                        primary_key: false,
+                        nullable: false,
+                        default: None,
+                        foreign_key: Some(ForeignKey {
+                            table: "activities".to_string(),
+                            column: "id".to_string(),
+                        }),
+                    },
+                    TableColumn {
+                        name: "content".to_string(),
+                        column_type: "TEXT".to_string(),
+                        primary_key: false,
+                        nullable: false,
+                        default: None,
+                        foreign_key: None,
+                    },
+                ],
+            },
+        ],
+    )?;
+    
+    Ok(())
 }
 ```
 
