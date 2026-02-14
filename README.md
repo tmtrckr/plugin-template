@@ -180,7 +180,8 @@ time-tracker-plugin-template/
 │   └── plugin.rs                 # Your plugin implementation
 ├── frontend/
 │   ├── src/
-│   │   └── index.tsx            # React components
+│   │   └── index.tsx            # Plugin entry (exports initialize/cleanup)
+│   ├── index.js                 # Built bundle (output of npm run build)
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── tsconfig.json
@@ -217,8 +218,8 @@ The `plugin.toml` file defines your plugin's metadata and configuration:
 
 ### [frontend] Section (Optional)
 
-- `entry`: Path to compiled JavaScript bundle
-- `components`: List of React component names to export
+- `entry`: Path to compiled JavaScript bundle (e.g. `frontend/index.js`)
+- `components`: List of React component names the plugin registers (for reference)
 
 ### [build] Section
 
@@ -371,24 +372,44 @@ api.register_query_filters(
 - **`invoke_command`**: Called when a command is invoked on your plugin. Handle your plugin's commands here.
 - **`shutdown`**: Called when the plugin is unloaded. Clean up any resources here.
 
+## Frontend Build Requirements
+
+The frontend must be built as a **single bundle** (`frontend/index.js`) with no relative imports to plugin source files in the built output. Use the template's `vite.config.ts` as a reference.
+
+- **Allowed external dependencies** (resolved at runtime by the app): `react`, `react/jsx-runtime`, `react-dom`, `lucide-react`, `date-fns`, and other npm packages from `node_modules`.
+- **App-provided modules** (must be marked external in Vite): `./store` (`useStore`), `./utils/format` (`formatTimerTime`), `./utils/toast` (`showSuccess`, `showError`, `handleApiError`), `./components/Common/Button`, `./components/Common/Card`. Import them as in the app (e.g. `import { useStore } from "./store";`).
+- All other plugin code must be bundled into `frontend/index.js` (no `./hooks/...` or `./components/...` imports that point at unbundled plugin files).
+
+See the TimeTracker **Plugin Developer Guide** (in the main app repo or docs) for the full Vite `external` list, checklist after build, and troubleshooting.
+
 ## Frontend Components
 
-Export React components from `frontend/src/index.tsx`:
+Export a default object with `initialize(api)` (and optionally `cleanup()`) from `frontend/src/index.tsx`. Register routes, sidebar items, dashboard widgets, and settings tabs inside `initialize` using the API provided by TimeTracker:
 
 ```tsx
-export const MySettings: React.FC = () => {
+import React from 'react';
+
+const MySettings: React.FC = () => {
   return <div>Plugin Settings UI</div>;
 };
 
 export default {
-  MySettings,
+  initialize(api) {
+    if (typeof api.registerSettingsTab === 'function') {
+      api.registerSettingsTab('MySettings', MySettings);
+    }
+  },
+  cleanup() {
+    // Clean up when the plugin is unloaded
+  },
 };
 ```
 
-List exported components in `plugin.toml`:
+List component names in `plugin.toml` for reference:
 
 ```toml
 [frontend]
+entry = "frontend/index.js"
 components = ["MySettings"]
 ```
 
@@ -659,6 +680,7 @@ This template is licensed under the MIT License. See LICENSE file for details.
 ## Resources
 
 - [TimeTracker Repository](https://github.com/tmtrckr/time-tracker-app)
+- TimeTracker **Plugin Developer Guide** (frontend bundle requirements, external modules, Vite config) — see the main app docs or repo
 - [Rust Plugin Development Guide](https://doc.rust-lang.org/book/)
 - [React Documentation](https://react.dev/)
 - [Tauri Documentation](https://tauri.app/)

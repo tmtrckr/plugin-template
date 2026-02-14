@@ -6,17 +6,29 @@ export default defineConfig({
   build: {
     lib: {
       entry: 'src/index.tsx',
-      name: 'ExamplePlugin',
-      fileName: 'index',
       formats: ['es'],
+      fileName: 'index',
     },
+    outDir: '.',
+    emptyOutDir: false,
     rollupOptions: {
-      external: ['react', 'react-dom'],
+      external: [
+        'react',
+        'react/jsx-runtime',
+        'react-dom',
+        'lucide-react',
+        'date-fns',
+        /^\.\/store$/,
+        /^\.\.\/store$/,
+        /^\.\/utils\/format$/,
+        /^\.\.\/utils\/format$/,
+        /^\.\/utils\/toast$/,
+        /^\.\.\/utils\/toast$/,
+        /^\.\/components\/Common\/(Button|Card)$/,
+        /^\.\/Common\/(Button|Card)$/,
+      ],
       output: {
-        globals: {
-          react: 'React',
-          'react-dom': 'ReactDOM',
-        },
+        format: 'es',
       },
     },
   },

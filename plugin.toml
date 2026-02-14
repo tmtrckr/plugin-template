@@ -14,7 +14,7 @@ max_core_version = "1.0.0"                # Maximum supported TimeTracker versio
 library_name = "example_plugin_backend"    # Library name (must match actual compiled library filename, e.g., "example_plugin_backend.dll" on Windows)
 
 [frontend]
-entry = "frontend/dist/index.js"          # Path to compiled JavaScript bundle
+entry = "frontend/index.js"          # Path to compiled JavaScript bundle
 components = ["ExampleSettings"]           # Exported React component names
 
 [build]

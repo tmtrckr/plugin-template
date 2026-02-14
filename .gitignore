@@ -7,6 +7,7 @@ Cargo.lock
 # Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/index.js
 frontend/.vite/
 
 # IDE
